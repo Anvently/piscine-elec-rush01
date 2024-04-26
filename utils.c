@@ -119,6 +119,18 @@ int	ft_strcmp(const char *s1, const char *s2)
 	return ((unsigned char) *s1 - (unsigned char) *s2);
 }
 
+void	ft_putnbr(uint16_t nb)
+{
+	if (nb <= 9)
+		uart_send('0' + nb);
+	else
+	{
+		ft_putnbr(nb / 10);
+		ft_putnbr(nb % 10);
+	}
+}
+
+
 bool	read_button1(void)
 {
 	static uint8_t	isPressed = FALSE;

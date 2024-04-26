@@ -51,6 +51,9 @@ static volatile	uint16_t	value = 9997;
 static volatile	uint8_t		digit_number = 4;
 const uint16_t				digit_value[4] = {1, 10, 100, 1000};
 
+static volatile uint8_t		expander_port0 = EXPANDER_DFT_PORT0;
+static volatile uint8_t		expander_port1 = 0;
+
 // Is triggered every ms (because Timer 1 is set to run at 1000Hz)
 ISR (TIMER1_COMPA_vect)
 {
@@ -69,14 +72,24 @@ ISR (TIMER1_COMPA_vect)
 	}
 }
 
-//If 1 digit => f > 30Hz => 30ms
-//If 2 digit => f > 60Hz => 16ms
-//If 3 digit => f > 90Hz => 10ms
-//If 4 digit => f > 120Hz => 8ms
+//1000HZ timer => every ms
 ISR (TIMER0_COMPA_vect)
 {
-	expander_set_segment(segmentIndex, segment_values[value / digit_value[segmentIndex] % 10]);
-	segmentIndex = (segmentIndex + 1) % digit_number;
+	// expander_set_segment(segmentIndex, segment_values[value / digit_value[segmentIndex] % 10]);
+	// segmentIndex = (segmentIndex + 1) % digit_number;
+}
+
+static void	startup(void)
+{
+	expander_port0 &= ~(0b1111 << 4);
+	expander_port1 = 0b11111111;
+	expander_set_output(expander_port0, expander_port1);
+	PORTB |= (1 << PB0) | (1 << PB1) | (1 << PB2) | (1 << PB4);
+	_delay_ms(3000);
+	expander_port0 |= (1111 << 4);
+	expander_port1 = 0;
+	expander_set_output(expander_port0, expander_port1);
+	PORTB &= ~((1 << PB0) | (1 << PB1) | (1 << PB2) | (1 << PB4));
 }
 
 int	main(void)
@@ -93,25 +106,19 @@ int	main(void)
 	
 	TIMSK1 |= (1 << OCIE1A);
 
-	/* ------------------------------ TIMER0 CONFIG ----------------------------- */
+	/* --------------------------------- I/O --------------------------------- */
 
-	TCCR0A |= (1 << WGM00);
-	TCCR0B |= (1 << WGM02) | (1 << CS02) | (1 << CS00);
-	OCR0A = 255 / (digit_number + 3);
-	TIMSK0 |= (1 << OCIE0A);
-
-	/* --------------------------------- OUTPUT --------------------------------- */
-
+	i2c_init(100000, 0, I2C_MODE_MASTER_TX);
 	DDRB |= (1 << PB4) | (1 << PB2) | (1 << PB1) | (1 << PB0); //set leds to output
+	DDRD &= ~((1 << PD2) | (1 << PD4));
+	expander_set_direction(0b11111110, 255);
+
 	/* -------------------------------- MAIN LOOP ------------------------------- */
 
 	sei();
 
 	LOGI("reset");
-
-	i2c_init(100000, 0, I2C_MODE_MASTER_TX);
-	expander_set_direction(EXPANDER_DFT_DDR0, EXPANDER_DFT_DDR1); //Set SW3 and LED5 to ouput
-	expander_set_output(EXPANDER_DFT_PORT0, 0);
+	startup();
 	while (1)
 	{
 	}
