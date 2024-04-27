@@ -52,7 +52,7 @@ char	uart_rx(void);
 
 void	uart_printstr(const char* str, uint8_t newline);
 
-void	uart_gnl(volatile char* buffer, volatile uint16_t size, const char* prompt, const char* restricted);
-void	uart_init_gnl_interrupt(volatile char *buffer, volatile uint16_t size, const char* prompt, const char *restricted);
+void	uart_gnl(volatile char* buffer, volatile uint16_t size, const char* prompt, const char* restricted, void (*handler)(char*, uint16_t));
+void	uart_init_gnl_interrupt(volatile char *buffer, volatile uint16_t size, const char* prompt, const char *restricted, void (*handler)(char*, uint16_t));
 
 #endif

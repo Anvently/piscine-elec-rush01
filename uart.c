@@ -91,7 +91,6 @@ void	uart_printstr(const char* str, uint8_t newline)
 int32_t	uart_rx_16(void)
 {
 	while (UART_RX_COMPLETE == FALSE); //Wait until something was received
-
 	uint8_t		status = UCSR0A;
 	uint16_t	data;
 
@@ -134,8 +133,9 @@ static volatile char*		gnl_buffer;
 static volatile uint16_t	gnl_buffer_size;
 static const char*			gnl_prompt;
 static const char*			gnl_restricted;
+static void 				(*gnl_handler)(char*, uint16_t);
 
-void	uart_init_gnl_interrupt(volatile char *buffer, volatile uint16_t size, const char* prompt, const char *restricted)
+void	uart_init_gnl_interrupt(volatile char *buffer, volatile uint16_t size, const char* prompt, const char *restricted, void (*handler)(char*, uint16_t))
 {
 	if (!isInit || !(uart_mode & (UART_RX_ENABLE)))
 	{
@@ -151,17 +151,20 @@ void	uart_init_gnl_interrupt(volatile char *buffer, volatile uint16_t size, cons
 	gnl_buffer_size = size;
 	gnl_prompt = prompt;
 	gnl_restricted = restricted;
+	gnl_handler = handler;
+	uart_printstr(prompt, 0);
 }
 
 ISR (USART_RX_vect)
 {
-	uart_gnl(gnl_buffer, gnl_buffer_size, gnl_prompt, gnl_restricted);
+	uart_gnl(gnl_buffer, gnl_buffer_size, gnl_prompt, gnl_restricted, gnl_handler);
 }
 
-void	uart_gnl(volatile char* buffer, volatile uint16_t size, const char* prompt, const char* restricted)
+void	uart_gnl(volatile char* buffer, volatile uint16_t size, const char* prompt, const char* restricted, void (*handler)(char*, uint16_t))
 {
-	char		c = 0;
-	uint16_t	index = 0;
+	char			c = 0;
+	static uint16_t	index = 0;
+
 
 	if (!isInit || !(uart_mode & (UART_RX_ENABLE)))
 	{
@@ -172,9 +175,6 @@ void	uart_gnl(volatile char* buffer, volatile uint16_t size, const char* prompt,
 			return;
 		}
 	}
-
-	if (prompt)
-			uart_printstr(prompt, 0);
 
 	do
 	{
@@ -196,5 +196,11 @@ void	uart_gnl(volatile char* buffer, volatile uint16_t size, const char* prompt,
 		}
 	} while (c != '\r' && (UCSR0B & (1 << RXCIE0) == 0));
 	if (c == '\r')
+	{
 		buffer[index] = '\0';
+		index = 0;
+		if (handler)
+			handler(buffer, size);
+		uart_printstr(prompt, 0);
+	}
 }

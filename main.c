@@ -76,8 +76,9 @@ static void	switch_mode(uint8_t newMode)
 	}
 	else if (mode == 6 || mode == 7 || mode == 8)
 		isFloat = false;
-	else if (mode == 9)
+	else if (mode == 9 || mode == 10 || mode == 11)
 		isTime = false;
+	mode = newMode;
 	print_value_leds(mode);
 }
 
@@ -259,6 +260,19 @@ static void	routine(void)
 			rtc_get_datas();
 			break;
 
+		case 10:
+			change_value((uint16_t)rtc_date[1] * 100 + rtc_date[2]);
+			digit_number = 4;
+			isTime = true;
+			rtc_get_datas();
+			break;
+
+		case 11:
+			change_value((uint16_t)rtc_date[0] * 100);
+			digit_number = 4;
+			rtc_get_datas();
+			break;
+
 		default:
 			digit_number = 0;
 			break;
@@ -278,8 +292,14 @@ static void	startup(void)
 	PORTB &= ~((1 << PB0) | (1 << PB1) | (1 << PB2) | (1 << PB4));
 }
 
+static void	parser(char* buffer, uint16_t size)
+{
+	LOGI("A line has been received");
+}
+
 int	main(void)
 {
+	char	line[17] = {0};
 	/* ------------------------------ TIMER1 CONFIG ----------------------------- */
 	//  Timer 1 is set to 1000Hz, every OCR1A match compare will generate an interrupt incrementing MILLI_COUNTER
 
@@ -308,6 +328,7 @@ int	main(void)
 	//Button 2
 	// PCICR |= (1 << PCIE2); //enable pin change interrupt 2
 	// PCMSK2 |= (1 << PCINT20);// | (PCINT18); //set mask for pcint20 (PD4) to 1
+	uart_init_gnl_interrupt(line, 17, "cmd:", "0123456789/ :", parser);
 
 	/* --------------------------------- RGB D5 --------------------------------- */
 
