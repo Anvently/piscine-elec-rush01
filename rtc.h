@@ -18,3 +18,9 @@
 #ifndef FALSE
  #define FALSE 0
 #endif
+
+#define RTC_ADDRESS 0b1010001
+
+uint8_t	rtc_get_datas(void);
+
+

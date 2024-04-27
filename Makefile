@@ -5,7 +5,7 @@ SRCS_FOLDER	=	./
 OBJS_FOLDER	=	.objs/
 
 SRCS_FILES	=	main.c uart.c i2c.c log.c error_led.c adc.c aht20.c eeprom.c spi.c utils.c \
-				expander.c
+				expander.c rtc.c
 
 SRCS		=	$(addprefix $(SRCS_FOLDER),$(SRCS_FILES))
 OBJS		=	$(addprefix $(OBJS_FOLDER),$(SRCS_FILES:.c=.o))
@@ -16,7 +16,7 @@ BAUDRATE	=	115200 #serial frequency for USB port
 CPU_FREQ	=	16000000UL #because board clock is 16Mhz (see schematic)
 
 DEPS		=	Makefile i2c.h log.h uart.h error_led.h adc.h aht20.h eeprom.h spi.h utils.h \
-				expander.h
+				expander.h rtc.h
 DEFINE		=	-DF_CPU=$(CPU_FREQ)
 
 CC			=	avr-gcc

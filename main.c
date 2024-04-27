@@ -12,6 +12,7 @@
 #include <spi.h>
 #include <aht20.h>
 #include <utils.h>
+#include <rtc.h>
 
 #ifndef CPU_FREQ
  #define CPU_FREQ 16000000
@@ -51,8 +52,12 @@ extern volatile uint8_t		expander_port1;
 
 static volatile uint8_t		button_state = 0;
 static volatile uint8_t		isFloat = 0;
+static volatile uint8_t		isTime = 0;
 
 extern volatile float		ftemperature, fhumidity;
+extern volatile uint8_t		rtc_date[3];
+extern volatile uint8_t		rtc_time[3];
+
 
 static volatile uint8_t		mode = 12;
 
@@ -69,9 +74,10 @@ static void	switch_mode(uint8_t newMode)
 		spi_init(SPI_MODE_DISABLE);
 		digit_number = 0;
 	}
-	else if (mode == 6)
+	else if (mode == 6 || mode == 7 || mode == 8)
 		isFloat = false;
-	mode = newMode;
+	else if (mode == 9)
+		isTime = false;
 	print_value_leds(mode);
 }
 
@@ -146,7 +152,8 @@ ISR (TIMER1_COMPA_vect)
 			display_mode4(segmentIndex);
 		else if (digit_number && mode != 12)
 			expander_set_segment((1 << (3 - segmentIndex)), segment_values[value / digit_value[segmentIndex] % 10] \
-															| ((isFloat && segmentIndex == 1) << 7));
+															| (((isFloat && segmentIndex == 1)
+																|| (isTime && (segmentIndex == 2 || segmentIndex == 0))) << 7));
 		else if (digit_number == 0)
 			expander_set_segment(0b1111, 0);
 		else
@@ -243,6 +250,13 @@ static void	routine(void)
 			digit_number = 3;
 			isFloat = true;
 			aht20_measure();
+			break;
+
+		case 9:
+			change_value((uint16_t)rtc_time[0] * 100 + rtc_time[1]);
+			digit_number = 4;
+			isTime = true;
+			rtc_get_datas();
 			break;
 
 		default:
