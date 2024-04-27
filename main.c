@@ -9,6 +9,9 @@
 #include <adc.h>
 #include <expander.h>
 #include <i2c.h>
+#include <spi.h>
+#include <aht20.h>
+#include <utils.h>
 
 #ifndef CPU_FREQ
  #define CPU_FREQ 16000000
@@ -29,66 +32,235 @@
 #define BTN1_IS_PRESSED ((PIND & (1 << PD2)) == 0)
 #define BTN2_IS_PRESSED ((PIND & (1 << PD4)) == 0)
 
-#define EXPANDER_ADDRESS_4 (0b0100 << 3)
-#define EXPANDER_ADDRESS_3 (0b111)
-#define EXPANDER_IPORT_0 0
-#define EXPANDER_IPORT_1 1
-#define EXPANDER_OPORT_0 2
-#define EXPANDER_OPORT_1 3
-#define EXPANDER_POL_0 4
-#define EXPANDER_POL_1 5
-#define EXPANDER_CONFIG_0 6
-#define EXPANDER_CONFIG_1 7
-#define EXPANDER_DFT_DDR0 0b11111110
-#define EXPANDER_DFT_DDR1 0b11111111
-#define EXPANDER_DFT_PORT0 0b11111110
+#define BUTTON_1_BIT 0
+#define BUTTON_2_BIT 1
+#define BUTTON_3_BIT 2
 
-extern const volatile uint8_t		segment_values[10];
+#define DELAY_START 1000
 
-static volatile	uint16_t	MILLI_COUNTER = 0;
+extern const volatile uint8_t		segment_values[11];
+
+volatile	uint16_t		MILLI_COUNTER = 0;
 static volatile	uint8_t		segmentIndex = 3;
 static volatile	uint16_t	value = 9997;
 static volatile	uint8_t		digit_number = 4;
 const uint16_t				digit_value[4] = {1, 10, 100, 1000};
 
-static volatile uint8_t		expander_port0 = EXPANDER_DFT_PORT0;
-static volatile uint8_t		expander_port1 = 0;
+extern volatile uint8_t		expander_port0;
+extern volatile uint8_t		expander_port1;
 
-// Is triggered every ms (because Timer 1 is set to run at 1000Hz)
-ISR (TIMER1_COMPA_vect)
+static volatile uint8_t		button_state = 0;
+static volatile uint8_t		isFloat = 0;
+
+extern volatile float		ftemperature, fhumidity;
+
+static volatile uint8_t		mode = 12;
+
+
+static void	switch_mode(uint8_t newMode)
 {
-	if (++MILLI_COUNTER % 10 == 0)
+	if (mode == 3)
+		isFloat = false;
+	else if (mode == 4)
 	{
-		value = readADC16(MUX0);
-		if (value >= 1000)
-			digit_number = 4;
-		else if (value >= 100)
-			digit_number = 3;
-		else if (value >= 10)
-			digit_number = 2;
-		else
-			digit_number = 1;
-		OCR0A = 255 / (digit_number + 3);
+		rgb_set(0, 0, 0);
+		spi_init(SPI_MODE_MASTER);
+		spi_set_leds(0, 0, 0);
+		spi_init(SPI_MODE_DISABLE);
+		digit_number = 0;
+	}
+	else if (mode == 6)
+		isFloat = false;
+	mode = newMode;
+	print_value_leds(mode);
+}
+
+static void	handle_button2(void)
+{
+	static uint8_t	isPressed = false;
+
+	if (BTN2_IS_PRESSED && isPressed == false) //if button is pressed for the first time
+	{	
+		switch_mode((mode + 11) % 12);
+		isPressed = true;
+		expander_port0 &= ~(1 << EXPANDER_LED10_IO);
+	}
+	else if (BTN2_IS_PRESSED)
+		expander_port0 &= ~(1 << EXPANDER_LED10_IO);
+	else if (BTN2_IS_PRESSED == false) //If state changes
+	{
+		isPressed = false;
+		expander_port0 |= (1 << EXPANDER_LED10_IO);
 	}
 }
 
-//1000HZ timer => every ms
-ISR (TIMER0_COMPA_vect)
+static void	display_mode4(uint8_t segmentIndex)
 {
-	// expander_set_segment(segmentIndex, segment_values[value / digit_value[segmentIndex] % 10]);
-	// segmentIndex = (segmentIndex + 1) % digit_number;
+	const uint8_t	values[4] = {0b01000000, 0b01011011, 0b01100110, 0b01000000};
+	expander_set_segment((1 << (3 - segmentIndex)), values[segmentIndex]);
+}
+
+static void	flash_mode4(void)
+{
+	static uint8_t	index = 0;
+	const uint32_t	colors[3] = {(uint32_t)BRIGHTNESS << 24 | 0xFF0000,\
+								 (uint32_t)BRIGHTNESS << 24 | 0x00FF00,\
+								 (uint32_t)BRIGHTNESS << 24 | 0x0000FF};
+	// LOGI("PING");
+	rgb_set((index == 0) * 255, (index == 1) * 255, (index == 2) * 255);
+	if (mode != 4)
+		return;
+	spi_init(SPI_MODE_MASTER);
+	spi_set_leds(colors[index], colors[index], colors[index]);
+	spi_init(SPI_MODE_DISABLE);
+	index = ++index % 3;
+}
+
+// Is triggered every ms (because Timer 1 is set to run at 1000Hz)
+//If 1 digit => f > 100Hz => 10ms
+//If 2 digit => f > 200Hz => 8ms
+//If 3 digit => f > 300Hz => 6ms
+//If 4 digit => f > 400Hz => 4ms
+ISR (TIMER1_COMPA_vect)
+{
+	// if (++MILLI_COUNTER % 5 == 0)
+	// {
+		
+	// }
+	if (++MILLI_COUNTER % 20)
+	{
+		if (read_button3())
+			expander_port0 &= ~(1 << EXPANDER_LED11_IO);
+		else
+			expander_port0 |= (1 << EXPANDER_LED11_IO);
+		handle_button2();
+	}
+	if (MILLI_COUNTER % 1000 == 0 && mode == 4)
+		flash_mode4();
+	if (MILLI_COUNTER % (12 - 2 - digit_number * 2))
+	{
+		segmentIndex = (segmentIndex + 1) % digit_number;
+		// if (mode == 4)
+			// LOGI("PONG");
+		if (mode == 4)
+			display_mode4(segmentIndex);
+		else if (digit_number && mode != 12)
+			expander_set_segment((1 << (3 - segmentIndex)), segment_values[value / digit_value[segmentIndex] % 10] \
+															| ((isFloat && segmentIndex == 1) << 7));
+		else if (digit_number == 0)
+			expander_set_segment(0b1111, 0);
+		else
+			expander_set_output(expander_port0, expander_port1);
+	}
+}
+
+
+// ISR (PCINT2_vect) //Button 2
+// {
+// 	static uint8_t	click = 0;
+// 	++click;
+	
+// 	if (click % 2)
+// 		mode = (mode + 11) % 12;
+// }
+
+ISR (INT0_vect) //Button 1
+{
+	if (EICRA == 0b01) //If the button was pressed while the toggle detection mode is set
+						// => that means event is actually caused by button release
+	{
+		EICRA = 0b10; //Set the detection mode back to falling edge 
+		expander_port0 ^= (1 << EXPANDER_LED9_IO);
+		switch_mode((mode + 1) % 12);
+		return;
+	}
+	else//If the boutton had enough time to debounce
+	{
+		expander_port0 ^= (1 << EXPANDER_LED9_IO);
+		EICRA = 0b01; //Set the detection mode to toggle to detect button release event
+	}
+}
+
+static void	change_value(uint16_t newValue)
+{
+	value = newValue;
+	if (newValue >= 1000)
+		digit_number = 4;
+	else if (newValue >= 100)
+		digit_number = 3;
+	else if (newValue >= 10)
+		digit_number = 2;
+	else
+		digit_number = 1;
+}
+
+static void	routine(void)
+{
+	switch (mode)
+	{
+		case 0: //DISPLAY RV1 value
+			change_value(readADC16(MUX0)); 
+			break;
+
+		case 1: //Display LDR value
+			change_value(readADC16(MUX1));
+			break;
+
+		case 2: //Display NTC value
+			change_value(readADC16(MUX2));
+			break;
+		
+		case 3: //Read MCUtemp
+			isFloat = true;
+			digit_number = 3;
+			change_value(readADCMCU());
+			break;
+
+		case 4: //42 + flash
+			digit_number = 4;
+			break;
+
+		case 5:
+			digit_number = 0;
+			break;
+
+		case 6:
+			change_value((uint16_t)(ftemperature * 10));
+			digit_number = 3;
+			isFloat = true;
+			aht20_measure();
+			break;
+
+		case 7:
+			change_value((uint16_t)((ftemperature * 1.8 + 32) * 10));
+			digit_number = 3;
+			isFloat = true;
+			aht20_measure();
+			break;
+
+		case 8:
+			change_value((uint16_t)(fhumidity * 10));
+			digit_number = 3;
+			isFloat = true;
+			aht20_measure();
+			break;
+
+		default:
+			digit_number = 0;
+			break;
+	}
 }
 
 static void	startup(void)
 {
-	expander_port0 &= ~(0b1111 << 4);
-	expander_port1 = 0b11111111;
-	expander_set_output(expander_port0, expander_port1);
+	cli();
+	expander_set_segment(0b1111, 255);
+	sei();
 	PORTB |= (1 << PB0) | (1 << PB1) | (1 << PB2) | (1 << PB4);
-	_delay_ms(3000);
-	expander_port0 |= (1111 << 4);
-	expander_port1 = 0;
-	expander_set_output(expander_port0, expander_port1);
+	timer_delay(DELAY_START);
+	cli();
+	expander_set_segment(0b1111, 0);
+	sei();
 	PORTB &= ~((1 << PB0) | (1 << PB1) | (1 << PB2) | (1 << PB4));
 }
 
@@ -103,23 +275,49 @@ int	main(void)
 	//Set operation mode to 11
 	TCCR1A |= (1 << WGM11) | (1 << WGM10);
 	TCCR1B |= (1 << WGM13);
-	
-	TIMSK1 |= (1 << OCIE1A);
 
 	/* --------------------------------- I/O --------------------------------- */
 
 	i2c_init(100000, 0, I2C_MODE_MASTER_TX);
 	DDRB |= (1 << PB4) | (1 << PB2) | (1 << PB1) | (1 << PB0); //set leds to output
-	DDRD &= ~((1 << PD2) | (1 << PD4));
+	DDRD |= (1 << PD3) | (1 << PD5) | (1 << PD6);
+	DDRD &= ~(1 << PD2);
+	DDRD &= ~(1 << PD4);
 	expander_set_direction(0b11111110, 255);
+
+	/* -------------------------------- INTERRUPT ------------------------------- */
+
+	TIMSK1 |= (1 << OCIE1A); //Timer 1 interrupt
+	//Button 1
+	EIMSK |= (1 << INT0);
+	EICRA |= (1 << ISC01); //falling edge on INT0 pin will trigger INT0
+	//Button 2
+	// PCICR |= (1 << PCIE2); //enable pin change interrupt 2
+	// PCMSK2 |= (1 << PCINT20);// | (PCINT18); //set mask for pcint20 (PD4) to 1
+
+	/* --------------------------------- RGB D5 --------------------------------- */
+
+	rgb_init(); //Init timer 0 & 2
+	rgb_set(0, 0, 0); //Set default duty cycle to 0
+
+	// /* --------------------------------- SPI RGB -------------------------------- */
+
+	spi_init(SPI_MODE_MASTER);
+	spi_set_leds(0, 0, 0);
+	spi_init(SPI_MODE_DISABLE);
+	DDRB |= (1 << PB4) | (1 << PB2) | (1 << PB1) | (1 << PB0); //set leds to output
 
 	/* -------------------------------- MAIN LOOP ------------------------------- */
 
 	sei();
 
+	aht20_calibrate();
+	aht20_measure();
 	LOGI("reset");
 	startup();
+	switch_mode(0);
 	while (1)
 	{
+		routine();
 	}
 }

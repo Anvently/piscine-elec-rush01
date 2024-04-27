@@ -19,5 +19,6 @@
 
 uint8_t		readADC8(uint8_t mux);
 uint16_t	readADC16(uint8_t mux);
+uint16_t	readADCMCU(void);
 
 #endif

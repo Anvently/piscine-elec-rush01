@@ -27,9 +27,7 @@ How to initialize SPI as master
 
 */
 
-
 static volatile uint8_t	spiMode = SPI_MODE_DISABLE;
-
 
 void	spi_init(uint8_t mode)
 {
@@ -38,12 +36,14 @@ void	spi_init(uint8_t mode)
 	if (mode == 0)
 	{
 		SPCR = 0;
+		SPI_DDRD_REGISTER |= (1 << SPI_MISO_PIN);
+		spiMode = mode;
 		return;
 	}
 	switch (mode & SPI_MODE_MASTER)
 	{
 		case SPI_MODE_MASTER:
-			SPI_DDRD_REGISTER = (1 << SPI_MOSI_PIN) | (1 << SPI_SCK_PIN) | (1 << SPI_SS_PIN);
+			SPI_DDRD_REGISTER |= (1 << SPI_MOSI_PIN) | (1 << SPI_SCK_PIN) | (1 << SPI_SS_PIN);
 			SPCR = (1 << SPE) | (1 << MSTR) | (1 << SPR0);//Enable interface and set master mode
 			SPI_DDRD_REGISTER &= ~(1 << SPI_MISO_PIN);
 			// SPI_PORT_REGISTER &= ~(1 << SPI_SS_PIN);

@@ -1,7 +1,10 @@
 #include <expander.h>
 
-const volatile uint8_t	segment_values[10] = {0b00111111, 0b00000110, 0b01011011, 0b01001111, \
-					0b01100110, 0b01101101, 0b01111101, 0b00000111, 0b01111111, 0b01101111};
+const volatile uint8_t	segment_values[11] = {0b00111111, 0b00000110, 0b01011011, 0b01001111, \
+					0b01100110, 0b01101101, 0b01111101, 0b00000111, 0b01111111, 0b01101111, 255};
+
+volatile uint8_t		expander_port0 = EXPANDER_DFT_PORT0;
+volatile uint8_t		expander_port1 = 0;
 
 void	expander_set_direction(uint8_t port0, uint8_t port1)
 {
@@ -47,7 +50,9 @@ void	expander_set_output(uint8_t port0, uint8_t port1)
 
 void	expander_set_segment(uint8_t segment, uint8_t value)
 {
-	uint8_t port0 = EXPANDER_DFT_PORT0 & ~(1 << (7 - segment));
+	expander_port0 |= (0b1111 << 4);
+	expander_port0 &= ~(segment << 4);
+	expander_port1 = value;
 	expander_set_output(EXPANDER_DFT_PORT0, 0);
-	expander_set_output(port0, value);
+	expander_set_output(expander_port0, expander_port1);
 }

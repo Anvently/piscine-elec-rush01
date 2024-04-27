@@ -1,4 +1,5 @@
 #include <utils.h>
+#include <expander.h>
 
 void	print_buffer(void* buffer, uint16_t size)
 {
@@ -133,29 +134,37 @@ void	ft_putnbr(uint16_t nb)
 
 bool	read_button1(void)
 {
-	static uint8_t	isPressed = FALSE;
+	static uint8_t	isPressed = false;
 
-	if (BTN1_IS_PRESSED && isPressed == FALSE) //if button is pressed for the first time
+	if (BTN1_IS_PRESSED && isPressed == false) //if button is pressed for the first time
 	{
 		
-		isPressed = TRUE;
+		isPressed = true;
 	}
-	else if (BTN1_IS_PRESSED == FALSE) //If state changes
-		isPressed = FALSE;
-	
+	else if (BTN1_IS_PRESSED == false) //If state changes
+		isPressed = false;
+	return (false);
 }
 
 bool	read_button2(void)
 {
-	static uint8_t	isPressed = FALSE;
+	static uint8_t	isPressed = false;
 
-	if (BTN2_IS_PRESSED && isPressed == FALSE) //if button is pressed for the first time
-	{
-		
-		isPressed = TRUE;
+	if (BTN2_IS_PRESSED && isPressed == false) //if button is pressed for the first time
+	{	
+		isPressed = true;
+		return (true);
 	}
-	else if (BTN2_IS_PRESSED == FALSE) //If state changes
-		isPressed = FALSE;
+	else if (BTN2_IS_PRESSED == false) //If state changes
+		isPressed = false;
+	return (false);
+}
+
+bool	read_button3(void)
+{
+	if (expander_read_port(EXPANDER_IPORT_0) & (1 << EXPANDER_BUTTON3_IO))
+		return (false);
+	return (true);
 }
 
 uint8_t	atoui_hex(char	str[2])
@@ -180,9 +189,9 @@ uint8_t	atoui_hex(char	str[2])
 void	rgb_set(uint8_t r, uint8_t g, uint8_t b)
 {
 	//Set the duty cycle of each output
-	OCR0A = DUTYGAP_TIMER0 * ((g / 25 * GREEN_FILTER) / 10); //Set duty cycle for GREEN
-	OCR0B = DUTYGAP_TIMER0 * ((r / 25 * RED_FILTER) / 10); //Set duty cycle for RED
-	OCR2B = DUTYGAP_TIMER2 * ((b / 25 * BLUE_FILTER) / 10); //Set duty cycle for BLUE
+	OCR0A = (uint16_t)g * GREEN_FILTER / 10; //Set duty cycle for GREEN
+	OCR0B = (uint16_t)r * RED_FILTER / 10; //Set duty cycle for RED
+	OCR2B = (uint16_t)b * BLUE_FILTER / 10; //Set duty cycle for BLUE
 }
 
 void	rgb_wheel(uint8_t pos) {
@@ -222,4 +231,27 @@ void	rgb_init(void)
 
 	TCCR2A |= (1 << COM2B1); //Set both OC2B => Clear OC2B on Compare Match when up-counting. Set OC2B on
 							// Compare Match when down-counting.
+}
+
+void	print_value_leds(uint8_t value)
+{
+	PORTB &= 0b11101000;//set all PB leds to low
+	//Check the 4 first bits of the value
+	//Turn on the according led for each bit
+	if (value & (1 << 0)) //Check bit 0
+		PORTB |= (1 << PB0); //Turn on L1
+	if (value & (1 << 1))
+		PORTB |= (1 << PB1);
+	if (value & (1 << 2))
+		PORTB |= (1 << PB2);
+	if (value & (1 << 3))
+		PORTB |= (1 << PB4);
+}
+
+extern volatile uint16_t	MILLI_COUNTER;
+
+void	timer_delay(uint16_t ms)
+{
+	uint16_t	counter = MILLI_COUNTER;
+	while (MILLI_COUNTER - counter < ms);
 }

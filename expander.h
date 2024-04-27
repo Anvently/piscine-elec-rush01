@@ -28,6 +28,11 @@
 #define EXPANDER_DFT_DDR1 0b11111111
 #define EXPANDER_DFT_PORT0 0b11111110
 
+#define EXPANDER_BUTTON3_IO 0
+#define EXPANDER_LED11_IO 1
+#define EXPANDER_LED10_IO 2
+#define EXPANDER_LED9_IO 3
+
 void		expander_set_direction(uint8_t port0, uint8_t port1);
 uint16_t	expander_read_ports(void);
 uint8_t		expander_read_port(uint8_t port);

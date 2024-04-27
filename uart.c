@@ -130,7 +130,35 @@ static bool	isValid(const char* restricted, const char c)
 	return (false);
 }
 
-void	uart_gnl(char* buffer, uint16_t size, const char* prompt, const char* restricted)
+static volatile char*		gnl_buffer;
+static volatile uint16_t	gnl_buffer_size;
+static const char*			gnl_prompt;
+static const char*			gnl_restricted;
+
+void	uart_init_gnl_interrupt(volatile char *buffer, volatile uint16_t size, const char* prompt, const char *restricted)
+{
+	if (!isInit || !(uart_mode & (UART_RX_ENABLE)))
+	{
+		if (uart_init(UART_MODE_ASYNC | UART_TX_ENABLE | UART_RX_ENABLE, UART_BAUDRATE, 
+			UART_DATA_BITS, UART_PARITY_BIT_E, UART_STOP_BITS))
+		{
+			error();
+			return;
+		}
+		UCSR0B |= (1 << RXCIE0); //enable interrupt receive
+	}
+	gnl_buffer = buffer;
+	gnl_buffer_size = size;
+	gnl_prompt = prompt;
+	gnl_restricted = restricted;
+}
+
+ISR (USART_RX_vect)
+{
+	uart_gnl(gnl_buffer, gnl_buffer_size, gnl_prompt, gnl_restricted);
+}
+
+void	uart_gnl(volatile char* buffer, volatile uint16_t size, const char* prompt, const char* restricted)
 {
 	char		c = 0;
 	uint16_t	index = 0;
@@ -152,24 +180,21 @@ void	uart_gnl(char* buffer, uint16_t size, const char* prompt, const char* restr
 	{
 		c = uart_rx();
 		if (c < 0)
-		{
 			error();
-			continue;
-		}
-		if (c == 127 && index > 0) //If char is DELETE
+		else if (c == 127 && index > 0) //If char is DELETE
 		{
 			buffer[index--] = '\0';
 			uart_printstr("\b \b", 0);
 		}
 		else if (c == '\r')
 			uart_printstr("", 1);
-		else if (c < 32 || c > 126 || index + 1 == size)
-			continue;
+		else if (c < 32 || c > 126 || index + 1 == size) {}
 		else if (index + 1 < size && (!restricted || isValid(restricted, c)))
 		{
 			buffer[index++] = c;
 			uart_send(c);
 		}
-	} while (c != '\r');
-	buffer[index] = '\0';
+	} while (c != '\r' && (UCSR0B & (1 << RXCIE0) == 0));
+	if (c == '\r')
+		buffer[index] = '\0';
 }

@@ -47,11 +47,15 @@ void		ft_putnbr(uint16_t nb);
 
 bool		read_button1(void);
 bool		read_button2(void);
+bool		read_button3(void);
+void		print_value_leds(uint8_t value);
 
 uint8_t		atoui_hex(char	str[2]);
 
 void		rgb_init(void);
 void		rgb_wheel(uint8_t pos);
 void		rgb_set(uint8_t r, uint8_t g, uint8_t b);
+
+void		timer_delay(uint16_t ms);
 
 #endif
