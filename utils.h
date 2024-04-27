@@ -56,6 +56,11 @@ void		rgb_init(void);
 void		rgb_wheel(uint8_t pos);
 void		rgb_set(uint8_t r, uint8_t g, uint8_t b);
 
+uint8_t		parse_int(char** ptr, uint16_t *value, char sep);
+char		*skip_space(char **ptr);
+uint8_t		ft_isspace(char c);
+uint8_t		ft_strtoi(const char *str, uint16_t *dest);
+
 void		timer_delay(uint16_t ms);
 
 #endif

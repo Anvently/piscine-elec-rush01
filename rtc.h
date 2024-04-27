@@ -22,5 +22,6 @@
 #define RTC_ADDRESS 0b1010001
 
 uint8_t	rtc_get_datas(void);
+void	rtc_set_datas(uint16_t* date, uint16_t* time);
 
 

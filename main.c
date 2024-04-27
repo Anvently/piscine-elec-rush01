@@ -55,7 +55,7 @@ static volatile uint8_t		isFloat = 0;
 static volatile uint8_t		isTime = 0;
 
 extern volatile float		ftemperature, fhumidity;
-extern volatile uint8_t		rtc_date[3];
+extern volatile uint16_t	rtc_date[3];
 extern volatile uint8_t		rtc_time[3];
 
 
@@ -261,14 +261,14 @@ static void	routine(void)
 			break;
 
 		case 10:
-			change_value((uint16_t)rtc_date[1] * 100 + rtc_date[2]);
+			change_value((uint16_t)rtc_date[2] * 100 + rtc_date[1]);
 			digit_number = 4;
 			isTime = true;
 			rtc_get_datas();
 			break;
 
 		case 11:
-			change_value((uint16_t)rtc_date[0] * 100);
+			change_value((uint16_t)rtc_date[0]);
 			digit_number = 4;
 			rtc_get_datas();
 			break;
@@ -294,12 +294,35 @@ static void	startup(void)
 
 static void	parser(char* buffer, uint16_t size)
 {
-	LOGI("A line has been received");
+	uint16_t	date[3] = {0}, time[3] = {0};
+	LOGD("A line has been received");
+	if (ft_strlen(buffer) != 19)
+		return (LOGE("Invalid size"));
+	char*	start = buffer;
+	if (parse_int(&buffer, date + 2, '/') || buffer != start + 2 || date[2] == 0 || date[2] > 31)
+		return (LOGE("Invalid day"));
+	buffer++;
+	if (parse_int(&buffer, date + 1, '/') || buffer != start + 5 || date[1] == 0 || date[1] > 12)
+		return (LOGE("Invalid month"));
+	buffer++;
+	if (parse_int(&buffer, date, ' ') || buffer != start + 10)
+		return (LOGE("Invalid year"));
+	buffer++;
+	if (parse_int(&buffer, time, ':') || buffer != start + 13 || time[0] > 23)
+		return (LOGE("Invalid hour"));
+	buffer++;
+	if (parse_int(&buffer, time + 1, ':') || buffer != start + 16 || time[1] > 59)
+		return (LOGE("Invalid minute"));
+	buffer++;
+	if (parse_int(&buffer, time + 2, '\0') || buffer != start + 19 || time[2] > 59)
+		return (LOGE("Invalid second"));
+	LOGD("Line is okay !");
+	rtc_set_datas(date, time);
 }
 
 int	main(void)
 {
-	char	line[17] = {0};
+	char	line[21] = {0};
 	/* ------------------------------ TIMER1 CONFIG ----------------------------- */
 	//  Timer 1 is set to 1000Hz, every OCR1A match compare will generate an interrupt incrementing MILLI_COUNTER
 
@@ -328,7 +351,7 @@ int	main(void)
 	//Button 2
 	// PCICR |= (1 << PCIE2); //enable pin change interrupt 2
 	// PCMSK2 |= (1 << PCINT20);// | (PCINT18); //set mask for pcint20 (PD4) to 1
-	uart_init_gnl_interrupt(line, 17, "cmd:", "0123456789/ :", parser);
+	uart_init_gnl_interrupt(line, 21, "cmd:", "0123456789/ :", parser);
 
 	/* --------------------------------- RGB D5 --------------------------------- */
 
